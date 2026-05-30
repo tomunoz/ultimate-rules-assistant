@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 class ApiService {
   // Production URL for your deployed Render backend (Web Service)
   // REPLACE this with your actual Render service URL after creation (e.g. https://your-app.onrender.com)
-  static const String _productionUrl = 'https://ultimate-frisbee-rulebook-api.onrender.com';
+  static const String _productionUrl = 'https://ultimate-rules-assistant.onrender.com';
 
   // Configured default local port for local development
   static const String _webLocalUrl = 'http://localhost:8000';
