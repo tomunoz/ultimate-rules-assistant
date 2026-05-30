@@ -1,0 +1,63 @@
+[
+  {
+    "id": "scenario_001",
+    "title": "Double Team vs. Solo Mark",
+    "category": "Marking Violations",
+    "description": "During a standard point, the thrower is trapped on the sideline. Defender A is actively stalling the thrower. Defender B positions themselves 2 meters away, blocking the thrower's open open-side break throw, but is not actively guarding any other offensive player. The thrower calls 'Double Team'."
+  },
+  {
+    "id": "scenario_002",
+    "title": "Brick Markings on a Pull",
+    "category": "Field Setup & Pulls",
+    "description": "A pull lands completely out of bounds on the sideline without touching any player or the ground in-bounds. The receiving team signals for a brick. Where exactly is the brick mark located, and how does the field dimension layout change if this is a standard match versus a Beach Ultimate match?"
+  },
+  {
+    "id": "scenario_003",
+    "title": "Receiving Foul in the Endzone",
+    "category": "Fouls & Scoring",
+    "description": "An offensive player leaps to catch a pass in the attacking endzone. While in the air, a defensive player initiates body-to-body contact, causing the offensive player to drop the disc. The offense calls a foul, and the defense contests the call. What happens next on the field?"
+  },
+  {
+    "id": "scenario_004",
+    "title": "The Pick Call Dynamic",
+    "category": "Violations",
+    "description": "An offensive cutter runs a sharp under-cut through a stack. Their defender is forced to hesitate because another offensive player stood static in their running lane, obstructing their path. The defender calls 'Pick' while the disc is mid-flight to a different player. The pass is completed."
+  },
+  {
+    "id": "scenario_005",
+    "title": "Strip Call During a Catch",
+    "category": "Fouls & Catches",
+    "description": "A receiver catches the disc cleanly in the air and firmly secures it. As they hit the ground, a defender swipes at the disc and knocks it loose from the receiver's hands before the receiver can establish a pivot foot. The receiver calls a 'Strip'. The defender claims it was a simultaneous play."
+  },
+  {
+    "id": "scenario_006",
+    "title": "Stall Out Mid-Throw",
+    "category": "Turnovers",
+    "description": "The marker is counting the stall. The moment the marker utters the first syllable of the final stall number (e.g., 'Ten' or 'Eight' depending on the ruleset), the thrower releases the disc. The pass is caught by an offensive teammate. The defender calls a 'Stall Out'."
+  },
+  {
+    "id": "scenario_007",
+    "title": "Field Dimensions for Youth Divisions",
+    "category": "Appendices & Layouts",
+    "description": "A tournament director is setting up fields for an Under-12 (U12) youth division tournament. What are the official field dimensions, endzone depths, and brick mark distances required, and which specific appendix dictates these modifications?"
+  },
+  {
+    "id": "scenario_008",
+    "title": "Dangerous Play Call during a Sky",
+    "category": "Fouls & Safety",
+    "description": "Two opposing players run at full speed toward a floating disc. Player A gets into position first and jumps vertically. Player B launches horizontally from behind, making spectacular clean contact with the disc first, but their trailing body severely collides with Player A's legs mid-air, causing a dangerous crash. Player A calls 'Dangerous Play'."
+  },
+  {
+    "id": "scenario_009",
+    "title": "Substitutions Mid-Point",
+    "category": "Roster & Game Flow",
+    "description": "During a grueling 3-minute point, an offensive player pulls a hamstring and collapses on the field while their team has possession of the disc. The team calls an injury timeout. Can they substitute the injured player, and if so, can the opposing team also make a substitution?"
+  },
+  {
+    "id": "scenario_010",
+    "title": "Offside on the Pull",
+    "category": "Violations",
+    "description": "As the pulling team releases the disc, two players on the pulling team have already crossed their own endzone goal line into the playing field. The receiving team catches the pull but immediately signals and calls an 'Offside' violation. How is play restarted?"
+  }
+]
+

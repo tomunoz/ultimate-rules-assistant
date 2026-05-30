@@ -1,0 +1,340 @@
+import os
+import re
+import json
+import requests
+from pypdf import PdfReader
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any
+
+app = FastAPI(title="Ultimate Rules Assistant API")
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Request schema
+class QueryRequest(BaseModel):
+    selected_leagues: List[str] = Field(..., description="Array of selected leagues (1 or 2 leagues)")
+    user_query: str = Field(..., description="The ultimate frisbee scenario query")
+
+# Global PDF page cache
+PDF_CACHE: Dict[str, List[Dict[str, Any]]] = {}
+
+# File path routing mapping
+LEAGUE_FILE_MAP = {
+    "USAU": ["USAU_Rules.pdf"],
+    "UFA": ["UFA_Rules.pdf"],
+    "WFDF": ["WFDF_Rules.pdf"],
+    "PUL": ["PUL_Rules.pdf", "USAU_Rules.pdf"]
+}
+
+# Resolve knowledge directory path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+KNOWLEDGE_DIR = os.path.join(PROJECT_ROOT, "knowledge")
+
+# --- Modern Google Gemini (google.genai) Configuration ---
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+USING_GEMINI = False
+
+if GEMINI_API_KEY:
+    try:
+        from google import genai
+        # Test client initialization
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        USING_GEMINI = True
+        print("\n==================================================")
+        print("   GOOGLE GEMINI PRO API ACTIVATED FOR PRODUCTION")
+        print("   (Using modern google.genai SDK)")
+        print("==================================================\n")
+    except Exception as e:
+        print(f"Error configuring Google Gemini: {e}")
+else:
+    print("\n==================================================")
+    print("   LOCAL OLLAMA ACTIVATED (DEVELOPMENT MODE)")
+    print("   Set 'GEMINI_API_KEY' env var to enable Gemini Pro")
+    print("==================================================\n")
+
+def clean_text(text: str) -> str:
+    """Removes excessive spaces and formats text cleanly."""
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+def tokenize(text: str) -> List[str]:
+    """Helper to tokenize text for keyword relevance matching."""
+    tokens = re.findall(r'\b\w{3,}\b', text.lower()) # words of length >= 3
+    stop_words = {'the', 'and', 'for', 'with', 'you', 'this', 'that', 'from', 'but', 'are', 'not', 'have', 'has'}
+    return [t for t in tokens if t not in stop_words]
+
+def load_all_rulebooks():
+    """Extracts and caches pages from the PDFs in the background on startup."""
+    print("--- PRE-LOADING ULTIMATE FRISBEE RULEBOOKS ---")
+    if not os.path.exists(KNOWLEDGE_DIR):
+        print(f"WARNING: Knowledge directory {KNOWLEDGE_DIR} not found.")
+        return
+
+    for file_name in os.listdir(KNOWLEDGE_DIR):
+        if not file_name.endswith(".pdf"):
+            continue
+        
+        file_path = os.path.join(KNOWLEDGE_DIR, file_name)
+        league_key = None
+        if "USAU" in file_name:
+            league_key = "USAU"
+        elif "UFA" in file_name:
+            league_key = "UFA"
+        elif "WFDF" in file_name:
+            league_key = "WFDF"
+        elif "PUL" in file_name:
+            league_key = "PUL"
+
+        if not league_key:
+            continue
+
+        try:
+            print(f"Caching {file_name} for league '{league_key}'...")
+            reader = PdfReader(file_path)
+            pages_data = []
+            for idx, page in enumerate(reader.pages):
+                text = page.extract_text() or ""
+                text_clean = clean_text(text)
+                if text_clean:
+                    pages_data.append({
+                        "page_num": idx + 1,
+                        "text": text_clean,
+                        "tokens": tokenize(text_clean)
+                    })
+            
+            PDF_CACHE[league_key] = pages_data
+            print(f"Successfully cached {len(pages_data)} pages for '{league_key}'.")
+        except Exception as e:
+            print(f"ERROR caching {file_name}: {e}")
+
+@app.on_event("startup")
+def startup_event():
+    load_all_rulebooks()
+
+def search_context_for_league(league: str, query: str, top_k: int = 5) -> str:
+    """Intelligently retrieves top K relevant pages for a single league from cache."""
+    files_to_query = LEAGUE_FILE_MAP.get(league, [])
+    if not files_to_query:
+        return f"[System Error]: League '{league}' has no associated rulebook."
+
+    if league not in PDF_CACHE:
+        print(f"Cache miss for {league}, attempting on-the-fly parsing...")
+        pages_list = []
+        for file_name in files_to_query:
+            file_path = os.path.join(KNOWLEDGE_DIR, file_name)
+            if os.path.exists(file_path):
+                try:
+                    reader = PdfReader(file_path)
+                    for idx, page in enumerate(reader.pages):
+                        text = page.extract_text() or ""
+                        cleaned = clean_text(text)
+                        if cleaned:
+                            pages_list.append({
+                                "page_num": idx + 1,
+                                "text": cleaned,
+                                "tokens": tokenize(cleaned),
+                                "source": file_name
+                            })
+                except Exception as e:
+                    print(f"Error loading {file_name} on-the-fly: {e}")
+        if pages_list:
+            PDF_CACHE[league] = pages_list
+
+    pages = PDF_CACHE.get(league, [])
+    if not pages:
+        return f"[No rulebook content found for {league}]"
+
+    query_tokens = tokenize(query)
+    if not query_tokens:
+        query_tokens = query.lower().split()
+
+    scored_pages = []
+    for p in pages:
+        score = 0
+        text_lower = p["text"].lower()
+        for token in query_tokens:
+            count = text_lower.count(token)
+            if count > 0:
+                score += count * len(token)
+        scored_pages.append((score, p))
+
+    scored_pages.sort(key=lambda x: x[0], reverse=True)
+    top_results = [item[1] for item in scored_pages[:top_k] if item[0] > 0]
+    
+    if not top_results:
+        top_results = pages[:2]
+
+    context_str = ""
+    for idx, p in enumerate(top_results):
+        source_label = p.get("source", f"{league}_Rules.pdf")
+        context_str += f"\n--- EXTRACT FROM {source_label} (Page {p['page_num']}) ---\n"
+        context_str += p["text"] + "\n"
+
+    return context_str.strip()
+
+def query_llm(system_prompt: str, user_prompt: str) -> str:
+    """Queries either Google Gemini API (production) or local Ollama (development fallback)."""
+    # 1. Primary: Google Gemini API via modern google.genai SDK (Render Production)
+    if USING_GEMINI:
+        try:
+            from google import genai
+            from google.genai import types
+            print("Querying Google Gemini via modern google.genai SDK (gemini-2.5-flash)...")
+            client = genai.Client(api_key=GEMINI_API_KEY)
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.15
+                )
+            )
+            if response.text:
+                return response.text
+        except Exception as e:
+            print(f"Error querying Google Gemini Pro API via new SDK: {e}. Falling back to Ollama...")
+
+    # 2. Fallback to local Ollama (Development Mode)
+    url = "http://127.0.0.1:11434/api/chat"
+    payload = {
+        "model": "gpt-oss:120b-cloud",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "stream": False
+    }
+    
+    try:
+        response = requests.post(url, json=payload, timeout=90)
+        if response.status_code == 200:
+            return response.json()["message"]["content"]
+    except Exception as e:
+        print(f"Error querying gpt-oss:120b-cloud via chat API: {e}")
+
+    try:
+        url_gen = "http://127.0.0.1:11434/api/generate"
+        payload_gen = {
+            "model": "gpt-oss:120b-cloud",
+            "prompt": f"System: {system_prompt}\n\nUser: {user_prompt}",
+            "stream": False
+        }
+        response_gen = requests.post(url_gen, json=payload_gen, timeout=90)
+        if response_gen.status_code == 200:
+            return response_gen.json()["response"]
+    except Exception as e:
+        print(f"Error querying gpt-oss:120b-cloud via generate API: {e}")
+
+    # Final Local Fallback
+    print("Running local model fallback: granite3.3:2b...")
+    payload["model"] = "granite3.3:2b"
+    try:
+        response = requests.post(url, json=payload, timeout=30)
+        if response.status_code == 200:
+            return response.json()["message"]["content"]
+    except Exception as e:
+        print(f"Error in granite3.3:2b fallback query: {e}")
+
+    return (
+        "### SYSTEM MESSAGE: SYNTHESIS ERROR\n\n"
+        "Failed to connect to both Google Gemini API and local Ollama model. "
+        "Please ensure 'GEMINI_API_KEY' is configured on Render, or local Ollama is running (`ollama serve`)."
+    )
+
+@app.post("/api/query")
+def process_rules_query(payload: QueryRequest):
+    leagues = payload.selected_leagues
+    query = payload.user_query
+
+    if not leagues or len(leagues) > 2:
+        raise HTTPException(status_code=400, detail="Must select either 1 or 2 leagues.")
+
+    system_prompt = (
+        "You are an expert Ultimate Frisbee rules official, head observer, and sports rules historian. "
+        "Evaluate the user's scenario using ONLY the provided document text retrieved by the backend routing logic.\n\n"
+    )
+
+    if len(leagues) == 1:
+        league_a = leagues[0]
+        context_a = search_context_for_league(league_a, query)
+
+        system_prompt += (
+            "IF THE USER SOUGHT A SINGLE LEAGUE:\n"
+            "Provide a structured summary response indicating exactly how an official on that specific field would rule. "
+            "Cite specific numbered rules or unnumbered Appendices/Section Headers accordingly.\n\n"
+            "CRITICAL HANDLING FOR RULE STRUCTURES:\n"
+            "- Be explicitly aware that core gameplay rules are numbered, but critical structural segments like Appendices "
+            "(e.g., USAU Beach, Youth, or Masters adjustments) are UNNUMBERED. Cite these by explicit Appendix name/Section Header "
+            "and quote the text.\n"
+            "- If a retrieved rulebook context is completely silent on the scenario, explicitly state that the respective league's "
+            "rulebook does not address the matter."
+        )
+
+        user_prompt = (
+            f"USER SCENARIO QUERY: {query}\n\n"
+            f"=== ROUTED RULEBOOK CONTEXT FOR LEAGUE: {league_a} ===\n"
+            f"{context_a}\n\n"
+            "Rule on the scenario using ONLY the text above. Cite exactly."
+        )
+
+    else:
+        league_a = leagues[0]
+        league_b = leagues[1]
+
+        context_a = search_context_for_league(league_a, query)
+        context_b = search_context_for_league(league_b, query)
+
+        system_prompt += (
+            "IF THE USER SOUGHT A LEAGUE COMPARISON (2 LEAGUES):\n"
+            "Provide a structured three-part response:\n"
+            "1. LEAGUE A RULING: How League A handles the play, citing specific numbered rules or unnumbered appendix headers.\n"
+            "2. LEAGUE B RULING: How League B handles the play, citing specific numbered rules or unnumbered appendix headers.\n"
+            "3. OBSERVER ANALYSIS & SUMMARY OF DIFFERENCES: A rigorous analytical comparison written in the tone of an expert observer. "
+            "Contrast the physical, structural, tactical, or timing differences between the two rulings (e.g., differences in field dimensions "
+            "from unnumbered appendices, or differing stall counts/penalties).\n\n"
+            "CRITICAL HANDLING FOR RULE STRUCTURES:\n"
+            "- Be explicitly aware that core gameplay rules are numbered, but critical structural segments like Appendices "
+            "(e.g., USAU Beach, Youth, or Masters adjustments) are UNNUMBERED. Cite these by explicit Appendix name/Section Header "
+            "and quote the text.\n"
+            "- If a retrieved rulebook context is completely silent on the scenario, explicitly state that the respective league's "
+            "rulebook does not address the matter.\n\n"
+            "DO NOT let rule crossover or context blending occur. Base the ruling for League A ONLY on League A's Context, "
+            "and League B ONLY on League B's Context."
+        )
+
+        user_prompt = (
+            f"USER SCENARIO QUERY: {query}\n\n"
+            f"=== ROUTED RULEBOOK CONTEXT FOR LEAGUE A: {league_a} ===\n"
+            f"{context_a}\n\n"
+            f"=== ROUTED RULEBOOK CONTEXT FOR LEAGUE B: {league_b} ===\n"
+            f"{context_b}\n\n"
+            f"Rule on the scenario and contrast the two leagues. Make sure part 1 uses ONLY Context A, and part 2 uses ONLY Context B."
+        )
+
+    response_text = query_llm(system_prompt, user_prompt)
+    return {
+        "selected_leagues": leagues,
+        "query": query,
+        "response": response_text
+    }
+
+@app.get("/api/scenarios")
+def get_scenarios():
+    """Fetches the 10 pre-defined scenarios for the frontend switcher."""
+    mock_data_path = os.path.join(PROJECT_ROOT, "backend", "mock_data.json")
+    if os.path.exists(mock_data_path):
+        try:
+            with open(mock_data_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error reading mock data: {e}")
+    raise HTTPException(status_code=404, detail="mock_data.json not found")
