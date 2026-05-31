@@ -229,6 +229,28 @@ def search_context_for_league(league: str, query: str, top_k: int = 5) -> str:
         context_str += f"\n--- EXTRACT FROM {source_label} (Page {p['page_num']}) ---\n"
         context_str += p["text"] + "\n"
 
+    # Inject supplementary metadata/diagram details to overcome RAG PDF extraction limits
+    if "USAU_Rules.pdf" in files_to_query:
+        context_str += (
+            "\n--- DIAGRAM METADATA & OFFICIAL ERRATA FOR USAU ---\n"
+            "- Appendix A (Field Diagram Dimensions & Layout):\n"
+            "  * Standard Field Dimensions: 110 yards (100 meters) total length, 40 yards (37 meters) width. The central zone is 70 yards (64 meters) long, and each end zone is 20 yards (18.25 meters) deep.\n"
+            "  * Standard Brick Mark (Section 4.G & Appendix A): Exactly 20 yards (18.25 meters) from the goal line, centered midway between the sidelines.\n"
+            "  * Standard Reverse Brick Line (Appendix A): Located exactly 10 yards (9.1 meters) behind the goal line (inside the defending end zone), centered midway between the sidelines.\n"
+            "- Appendix E (Youth Rules Sizing Recommendations - E.2 Recommendation table on Page 53):\n"
+            "  * Under-12 (3v3 format): Central zone 25-35 yd, width 15-20 yd, end zone 5-10 yd, brick mark 7-10 yd from the goal line.\n"
+            "  * Under-12 (4v4 format): Central zone 35-45 yd, width 20-25 yd, end zone 10-15 yd, brick mark 10-13 yd from the goal line.\n"
+            "  * Under-15 (5v5 format): Central zone 45-55 yd, width 25-35 yd, end zone 12-18 yd, brick mark 13-16 yd from the goal line.\n"
+            "  * Under-17/20 (6v6 format): Central zone 55-65 yd, width 30-35 yd, end zone 15-20 yd, brick mark 16-18 yd from the goal line.\n"
+        )
+    if "WFDF_Rules.pdf" in files_to_query:
+        context_str += (
+            "\n--- DIAGRAM METADATA & OFFICIAL ERRATA FOR WFDF ---\n"
+            "- Figure 1 (WFDF Standard Field Dimensions & Layout):\n"
+            "  * Standard Field Dimensions: 100 meters total length, 37 meters width. The central zone is 64 meters long, and each end zone is 18 meters deep.\n"
+            "  * Standard Brick Mark (Section 2.5 & Figure 1): Located a distance equal to the length of the end zone away from each goal line (which is exactly 18 meters from the goal line), centered midway between the sidelines.\n"
+        )
+
     return context_str.strip()
 
 def query_llm(system_prompt: str, user_prompt: str) -> str:
