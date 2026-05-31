@@ -260,20 +260,29 @@ def query_llm(system_prompt: str, user_prompt: str) -> str:
         try:
             from google import genai
             from google.genai import types
-            print("Querying Google Gemini via modern google.genai SDK (gemini-3.5-flash)...")
             client = genai.Client(api_key=GEMINI_API_KEY)
-            response = client.models.generate_content(
-                model='gemini-3.5-flash',
-                contents=user_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=0.15
-                )
-            )
-            if response.text:
-                return response.text
+            
+            # Sequentially attempt models to ensure absolute high-availability on Render
+            models_to_try = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-1.5-flash']
+            
+            for model_name in models_to_try:
+                try:
+                    print(f"Querying Google Gemini via modern SDK ({model_name})...")
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=user_prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_prompt,
+                            temperature=0.15
+                        )
+                    )
+                    if response.text:
+                        return response.text
+                except Exception as e:
+                    print(f"Error querying Google Gemini model '{model_name}': {e}. Trying next model...")
+                    
         except Exception as e:
-            print(f"Error querying Google Gemini Pro API via new SDK: {e}. Falling back to Ollama...")
+            print(f"General SDK initialization error: {e}. Falling back to Ollama...")
 
     # 2. Fallback to local Ollama (Development Mode)
     url = "http://127.0.0.1:11434/api/chat"
