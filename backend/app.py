@@ -29,7 +29,6 @@ class QueryRequest(BaseModel):
 PDF_CACHE: Dict[str, List[Dict[str, Any]]] = {}
 
 # Global Document Frequency Cache (for TF-IDF)
-# Format: { "USAU": { "quarters": 2, "game": 45, ... }, ... }
 DOC_FREQUENCIES: Dict[str, Dict[str, int]] = {}
 
 # File path routing mapping
@@ -65,6 +64,21 @@ else:
     print("   Set 'GEMINI_API_KEY' env var to enable Gemini Pro")
     print("==================================================\n")
 
+# Domain Synonym Map for Query Expansion (resolving vocabulary mismatch)
+SYNONYM_MAP = {
+    "duration": ["quarter", "quarters", "minutes", "timing", "regulation", "time", "length"],
+    "long": ["quarter", "quarters", "minutes", "timing", "regulation", "time", "length"],
+    "last": ["quarter", "quarters", "minutes", "timing", "regulation", "time", "length"],
+    "time": ["timing", "regulation", "quarter", "quarters", "minutes"],
+    "length": ["timing", "regulation", "quarter", "quarters", "minutes"],
+    "brick": ["sideline", "pull", "signal", "out", "bounds"],
+    "double": ["team", "marking", "violation", "marker"],
+    "team": ["double", "marking", "violation"],
+    "foul": ["contact", "receiving", "collision", "play", "dangerous"],
+    "timing": ["quarter", "quarters", "minutes", "regulation"],
+    "quarters": ["minutes", "timing", "regulation", "duration"]
+}
+
 def clean_text(text: str) -> str:
     """Removes excessive spaces and formats text cleanly."""
     text = re.sub(r'\s+', ' ', text)
@@ -73,13 +87,20 @@ def clean_text(text: str) -> str:
 def tokenize(text: str) -> List[str]:
     """Helper to tokenize text for keyword relevance matching."""
     tokens = re.findall(r'\b\w{3,}\b', text.lower()) # words of length >= 3
-    # Expanded list of stop words to filter out generic rules vocabulary
     stop_words = {
         'the', 'and', 'for', 'with', 'you', 'this', 'that', 'from', 'but', 'are', 'not', 
         'have', 'has', 'their', 'they', 'our', 'who', 'which', 'its', 'any', 'each', 'all',
         'was', 'were', 'been', 'will', 'should', 'would', 'can', 'could', 'may', 'must'
     }
     return [t for t in tokens if t not in stop_words]
+
+def expand_query_tokens(tokens: List[str]) -> List[str]:
+    """Expands query tokens using the synonym map to resolve vocabulary mismatch."""
+    expanded = list(tokens)
+    for t in tokens:
+        if t in SYNONYM_MAP:
+            expanded.extend(SYNONYM_MAP[t])
+    return list(set(expanded))
 
 def load_all_rulebooks():
     """Extracts and caches pages from the PDFs in the background on startup, calculating TF-IDF stats."""
@@ -117,7 +138,8 @@ def load_all_rulebooks():
                     pages_data.append({
                         "page_num": idx + 1,
                         "text": text_clean,
-                        "tokens": tokenize(text_clean)
+                        "tokens": tokenize(text_clean),
+                        "source": file_name
                     })
             
             PDF_CACHE[league_key] = pages_data
@@ -139,51 +161,41 @@ def startup_event():
     load_all_rulebooks()
 
 def search_context_for_league(league: str, query: str, top_k: int = 5) -> str:
-    """Intelligently retrieves top K relevant pages for a single league using TF-IDF Page Ranking."""
+    """Intelligently retrieves top K relevant pages using TF-IDF and Query Expansion."""
     files_to_query = LEAGUE_FILE_MAP.get(league, [])
     if not files_to_query:
         return f"[System Error]: League '{league}' has no associated rulebook."
 
-    # Lazy load if cache is empty
-    if league not in PDF_CACHE:
-        print(f"Cache miss for {league}, attempting on-the-fly parsing...")
-        pages_list = []
-        for file_name in files_to_query:
-            file_path = os.path.join(KNOWLEDGE_DIR, file_name)
-            if os.path.exists(file_path):
-                try:
-                    reader = PdfReader(file_path)
-                    for idx, page in enumerate(reader.pages):
-                        text = page.extract_text() or ""
-                        cleaned = clean_text(text)
-                        if cleaned:
-                            pages_list.append({
-                                "page_num": idx + 1,
-                                "text": cleaned,
-                                "tokens": tokenize(cleaned),
-                                "source": file_name
-                            })
-                except Exception as e:
-                    print(f"Error loading {file_name} on-the-fly: {e}")
-        if pages_list:
-            PDF_CACHE[league] = pages_list
-            # Build DF map on the fly
-            df_map = {}
-            for p in pages_list:
-                unique_tokens = set(p["tokens"])
-                for token in unique_tokens:
-                    df_map[token] = df_map.get(token, 0) + 1
-            DOC_FREQUENCIES[league] = df_map
+    # Programmatic concurrent cache assembly (Crucial Bug Fix for PUL)
+    pages = []
+    df_map = {}
+    
+    for file_name in files_to_query:
+        target_key = None
+        if "USAU" in file_name:
+            target_key = "USAU"
+        elif "UFA" in file_name:
+            target_key = "UFA"
+        elif "WFDF" in file_name:
+            target_key = "WFDF"
+        elif "PUL" in file_name:
+            target_key = "PUL"
+            
+        if target_key and target_key in PDF_CACHE:
+            pages.extend(PDF_CACHE[target_key])
+            # Merge document frequencies
+            for token, count in DOC_FREQUENCIES.get(target_key, {}).items():
+                df_map[token] = df_map.get(token, 0) + count
 
-    pages = PDF_CACHE.get(league, [])
     if not pages:
         return f"[No rulebook content found for {league}]"
 
+    # Tokenize and expand query to resolve vocabulary mismatch
     query_tokens = tokenize(query)
     if not query_tokens:
         query_tokens = query.lower().split()
-
-    df_map = DOC_FREQUENCIES.get(league, {})
+    
+    expanded_tokens = expand_query_tokens(query_tokens)
     N = len(pages)
 
     # Score pages based on TF-IDF * WordLength heuristic
@@ -191,14 +203,12 @@ def search_context_for_league(league: str, query: str, top_k: int = 5) -> str:
     for p in pages:
         score = 0.0
         text_lower = p["text"].lower()
-        for token in query_tokens:
+        for token in expanded_tokens:
             tf = text_lower.count(token)
             if tf > 0:
-                # Document Frequency (DF) of token
                 df = df_map.get(token, 0)
-                # Smooth Inverse Document Frequency (IDF)
+                # Smooth Inverse Document Frequency
                 idf = math.log((N + 1) / (df + 1)) + 1
-                # Length-weighted TF-IDF calculation
                 score += tf * idf * len(token)
         scored_pages.append((score, p))
 
