@@ -302,6 +302,384 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  void _showHowToDialog() {
+    int activeTab = 0;
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: Container(
+                    width: 600,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF16151E).withOpacity(0.92),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white.withOpacity(0.08), width: 1.5),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Title + Close Button
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.help_outline, color: Color(0xFF7F5AF0)),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'How to Use the Assistant',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, color: Colors.white60),
+                              onPressed: () => Navigator.of(context).pop(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Custom Tab Bar
+                        Container(
+                          height: 44,
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white.withOpacity(0.05)),
+                          ),
+                          child: Row(
+                            children: [
+                              _buildTabItem(0, '1. How to Ask', activeTab, () => setDialogState(() => activeTab = 0)),
+                              _buildTabItem(1, '2. Good vs Poor', activeTab, () => setDialogState(() => activeTab = 1)),
+                              _buildTabItem(2, '3. AI Limits', activeTab, () => setDialogState(() => activeTab = 2)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        
+                        // Tab Content Area
+                        Flexible(
+                          child: SingleChildScrollView(
+                            child: _buildTabContent(activeTab),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+        );
+      },
+    );
+  }
+
+  Widget _buildTabItem(int index, String title, int activeIndex, VoidCallback onTap) {
+    final isActive = index == activeIndex;
+    return Expanded(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(9),
+        child: Material(
+          color: isActive ? const Color(0xFF7F5AF0) : Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: Center(
+              child: Text(
+                title,
+                style: GoogleFonts.outfit(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: isActive ? Colors.white : Colors.white60,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabContent(int tabIndex) {
+    if (tabIndex == 0) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'THE "THREE W\'S" OF RULES SEARCH',
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF7F5AF0),
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'The AI acts like a Head Rules Observer standing on the field. To get a perfect ruling, describe your play with these details:',
+            style: GoogleFonts.outfit(fontSize: 14, color: Colors.white70, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          _buildWCard('WHO', 'State who has possession and is acting.', 'e.g., "The thrower is pivoting...", "A cutter leaps for a catch..."'),
+          const SizedBox(height: 8),
+          _buildWCard('WHERE', 'Define where on the field the action is.', 'e.g., "Inside the opponent\'s end zone...", "On the sideline tape..."'),
+          const SizedBox(height: 8),
+          _buildWCard('WHAT', 'Describe the infraction or call made.', 'e.g., "The marker initiates contact...", "The defense calls a pick..."'),
+          const SizedBox(height: 24),
+          
+          Text(
+            'PROMPT ENGINEERING TIPS',
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF7F5AF0),
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildTipRow('Be Specific, Not Generic', 'Describe the exact physical sequence (e.g. catches in-air vs touching ground) rather than general queries.'),
+          _buildTipRow('Define the Format', 'Mention if it is standard play, Beach Ultimate, or Youth play to steer RAG to the correct Appendices.'),
+          _buildTipRow('State Your Desired Output', 'Ask for format styles, e.g. "Summarize the step-by-step restart procedure" or "Compare stall count penalties."'),
+        ],
+      );
+    } else if (tabIndex == 1) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'GOOD VS. POOR QUERY COMPARISONS',
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF7F5AF0),
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Observe how adding minor details to your phrasing completely transforms retrieval accuracy:',
+            style: GoogleFonts.outfit(fontSize: 14, color: Colors.white70, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          
+          _buildQueryComparison(
+            poor: '“Can you substitute players?”',
+            good: '“During a live point, a player collapses with an injury. What are the injury substitution rules, and can the opponent also sub?”',
+            why: 'Defining the game state (live point) and trigger (injury timeout) pulls in player roster rules rather than general timeout clauses.',
+          ),
+          const SizedBox(height: 12),
+          _buildQueryComparison(
+            poor: '“Where do you put the disc after an OOB pull?”',
+            good: '“A pull goes out of bounds on the sideline untouched. If the receiving team signals brick, where is the disc placed in standard vs beach play?”',
+            why: 'Specifying the infraction (untouched OOB pull) and action (brick signal) triggers exact page matches for Brick Marks.',
+          ),
+          const SizedBox(height: 12),
+          _buildQueryComparison(
+            poor: '“What happens on a double team?”',
+            good: '“A defender is stalling the thrower, and a second defender stands 2 meters away to block the break throw. The thrower calls double team. What is the ruling?”',
+            why: 'Detailing the defensive positions and infraction call matches marking violation criteria perfectly.',
+          ),
+        ],
+      );
+    } else {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'UNDERSTANDING THE AI CAPABILITIES',
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF7F5AF0),
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildLimitRow(Icons.image_not_supported_outlined, 'Diagram & Image Limitations', 'The assistant searches extracted text. Standard field layout dimensions (e.g. 20-yard brick marks, 18-meter WFDF marks) are graphical and unextractable from diagrams, so we have injected custom supplementary metadata to bridge this gap.'),
+          _buildLimitRow(Icons.text_fields_outlined, 'Wording Sensitivity', 'If the AI reports that a rulebook is "silent" on a scenario, try rewording your text using synonyms (e.g., swapping "long" or "last" with "regulation timing, quarters, or duration").'),
+          _buildLimitRow(Icons.compare_outlined, 'Absolute Context Isolation', 'In dual-league comparison mode, the backend programmatically isolates rulebook context to prevent crossover reasoning. You can trust that the USAU and WFDF summaries are completely separate and crosstalk-free.'),
+        ],
+      );
+    }
+  }
+
+  Widget _buildWCard(String title, String desc, String example) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.02),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.04)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF7F5AF0).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.3)),
+            ),
+            child: Text(
+              title,
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF8F6AFF),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  desc,
+                  style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  example,
+                  style: GoogleFonts.firaCode(fontSize: 11, color: Colors.white30),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTipRow(String title, String desc) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF2CB67D)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  desc,
+                  style: GoogleFonts.outfit(fontSize: 13, color: Colors.white60),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQueryComparison({required String poor, required String good, required String why}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.02),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.04)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.cancel_outlined, size: 16, color: Color(0xFFF25F4C)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  poor,
+                  style: GoogleFonts.outfit(fontSize: 13, color: Colors.white38, fontStyle: FontStyle.italic),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF2CB67D)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  good,
+                  style: GoogleFonts.outfit(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+          const Divider(color: Colors.white10, height: 16),
+          Text(
+            why,
+            style: GoogleFonts.outfit(fontSize: 12, color: Colors.white60),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLimitRow(IconData icon, String title, String desc) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.02),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withOpacity(0.05)),
+            ),
+            child: Icon(icon, size: 16, color: const Color(0xFF2CB67D)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  desc,
+                  style: GoogleFonts.outfit(fontSize: 13, color: Colors.white60, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInfoRow(String label, String value, {bool isLink = false, VoidCallback? onTap}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -444,34 +822,69 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ],
               ),
               
-              // Custom styled Info Button
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Material(
-                  color: Colors.white.withOpacity(0.04),
-                  child: InkWell(
-                    onTap: _showInfoDialog,
-                    hoverColor: const Color(0xFF7F5AF0).withOpacity(0.12),
-                    splashColor: const Color(0xFF7F5AF0).withOpacity(0.2),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.info_outline, size: 16, color: Colors.white70),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Info',
-                            style: GoogleFonts.outfit(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white70,
-                            ),
+              // Custom styled Onboarding & Info Action Buttons
+              Row(
+                children: [
+                  // How to Use Button
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Material(
+                      color: Colors.white.withOpacity(0.04),
+                      child: InkWell(
+                        onTap: _showHowToDialog,
+                        hoverColor: const Color(0xFF7F5AF0).withOpacity(0.12),
+                        splashColor: const Color(0xFF7F5AF0).withOpacity(0.2),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.help_outline, size: 16, color: Colors.white70),
+                              const SizedBox(width: 8),
+                              Text(
+                                'How to Use',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  // Info Button
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Material(
+                      color: Colors.white.withOpacity(0.04),
+                      child: InkWell(
+                        onTap: _showInfoDialog,
+                        hoverColor: const Color(0xFF7F5AF0).withOpacity(0.12),
+                        splashColor: const Color(0xFF7F5AF0).withOpacity(0.2),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.info_outline, size: 16, color: Colors.white70),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Info',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
