@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import math
 import requests
 from pypdf import PdfReader
 from fastapi import FastAPI, HTTPException
@@ -27,6 +28,10 @@ class QueryRequest(BaseModel):
 # Global PDF page cache
 PDF_CACHE: Dict[str, List[Dict[str, Any]]] = {}
 
+# Global Document Frequency Cache (for TF-IDF)
+# Format: { "USAU": { "quarters": 2, "game": 45, ... }, ... }
+DOC_FREQUENCIES: Dict[str, Dict[str, int]] = {}
+
 # File path routing mapping
 LEAGUE_FILE_MAP = {
     "USAU": ["USAU_Rules.pdf"],
@@ -46,7 +51,6 @@ USING_GEMINI = False
 if GEMINI_API_KEY:
     try:
         from google import genai
-        # Test client initialization
         client = genai.Client(api_key=GEMINI_API_KEY)
         USING_GEMINI = True
         print("\n==================================================")
@@ -69,11 +73,16 @@ def clean_text(text: str) -> str:
 def tokenize(text: str) -> List[str]:
     """Helper to tokenize text for keyword relevance matching."""
     tokens = re.findall(r'\b\w{3,}\b', text.lower()) # words of length >= 3
-    stop_words = {'the', 'and', 'for', 'with', 'you', 'this', 'that', 'from', 'but', 'are', 'not', 'have', 'has'}
+    # Expanded list of stop words to filter out generic rules vocabulary
+    stop_words = {
+        'the', 'and', 'for', 'with', 'you', 'this', 'that', 'from', 'but', 'are', 'not', 
+        'have', 'has', 'their', 'they', 'our', 'who', 'which', 'its', 'any', 'each', 'all',
+        'was', 'were', 'been', 'will', 'should', 'would', 'can', 'could', 'may', 'must'
+    }
     return [t for t in tokens if t not in stop_words]
 
 def load_all_rulebooks():
-    """Extracts and caches pages from the PDFs in the background on startup."""
+    """Extracts and caches pages from the PDFs in the background on startup, calculating TF-IDF stats."""
     print("--- PRE-LOADING ULTIMATE FRISBEE RULEBOOKS ---")
     if not os.path.exists(KNOWLEDGE_DIR):
         print(f"WARNING: Knowledge directory {KNOWLEDGE_DIR} not found.")
@@ -112,7 +121,16 @@ def load_all_rulebooks():
                     })
             
             PDF_CACHE[league_key] = pages_data
-            print(f"Successfully cached {len(pages_data)} pages for '{league_key}'.")
+            
+            # Compute Document Frequency (DF) for this league
+            df_map = {}
+            for p in pages_data:
+                unique_tokens = set(p["tokens"])
+                for token in unique_tokens:
+                    df_map[token] = df_map.get(token, 0) + 1
+            DOC_FREQUENCIES[league_key] = df_map
+            
+            print(f"Successfully cached {len(pages_data)} pages & calculated DF for '{league_key}'.")
         except Exception as e:
             print(f"ERROR caching {file_name}: {e}")
 
@@ -121,11 +139,12 @@ def startup_event():
     load_all_rulebooks()
 
 def search_context_for_league(league: str, query: str, top_k: int = 5) -> str:
-    """Intelligently retrieves top K relevant pages for a single league from cache."""
+    """Intelligently retrieves top K relevant pages for a single league using TF-IDF Page Ranking."""
     files_to_query = LEAGUE_FILE_MAP.get(league, [])
     if not files_to_query:
         return f"[System Error]: League '{league}' has no associated rulebook."
 
+    # Lazy load if cache is empty
     if league not in PDF_CACHE:
         print(f"Cache miss for {league}, attempting on-the-fly parsing...")
         pages_list = []
@@ -148,6 +167,13 @@ def search_context_for_league(league: str, query: str, top_k: int = 5) -> str:
                     print(f"Error loading {file_name} on-the-fly: {e}")
         if pages_list:
             PDF_CACHE[league] = pages_list
+            # Build DF map on the fly
+            df_map = {}
+            for p in pages_list:
+                unique_tokens = set(p["tokens"])
+                for token in unique_tokens:
+                    df_map[token] = df_map.get(token, 0) + 1
+            DOC_FREQUENCIES[league] = df_map
 
     pages = PDF_CACHE.get(league, [])
     if not pages:
@@ -157,19 +183,32 @@ def search_context_for_league(league: str, query: str, top_k: int = 5) -> str:
     if not query_tokens:
         query_tokens = query.lower().split()
 
+    df_map = DOC_FREQUENCIES.get(league, {})
+    N = len(pages)
+
+    # Score pages based on TF-IDF * WordLength heuristic
     scored_pages = []
     for p in pages:
-        score = 0
+        score = 0.0
         text_lower = p["text"].lower()
         for token in query_tokens:
-            count = text_lower.count(token)
-            if count > 0:
-                score += count * len(token)
+            tf = text_lower.count(token)
+            if tf > 0:
+                # Document Frequency (DF) of token
+                df = df_map.get(token, 0)
+                # Smooth Inverse Document Frequency (IDF)
+                idf = math.log((N + 1) / (df + 1)) + 1
+                # Length-weighted TF-IDF calculation
+                score += tf * idf * len(token)
         scored_pages.append((score, p))
 
+    # Sort descending by score
     scored_pages.sort(key=lambda x: x[0], reverse=True)
+
+    # Grab the top K scoring pages
     top_results = [item[1] for item in scored_pages[:top_k] if item[0] > 0]
     
+    # Fallback to first few pages if no keyword matched
     if not top_results:
         top_results = pages[:2]
 
