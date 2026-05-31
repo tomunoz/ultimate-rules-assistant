@@ -11,7 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.1.0
-  flutter_markdown: any
+  flutter_markdown_plus: any
   google_fonts: any
   url_launcher: any
 
