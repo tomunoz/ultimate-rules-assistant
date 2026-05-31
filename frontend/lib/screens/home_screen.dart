@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -59,7 +60,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       setState(() {
         _scenariosError = e.toString();
         _isLoadingScenarios = false;
-        // Load offline fallback scenarios so app continues to look fully functional
         _scenarios = _getOfflineFallbackScenarios();
       });
     }
@@ -108,7 +108,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     setState(() {
       _queryController.text = scenario['description'] ?? '';
     });
-    // Trigger scroll animation focus on input field
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -117,6 +116,289 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ),
         backgroundColor: _leagueColors[_selectedLeagueA],
         duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// Securely launches external browser URLs
+  Future<void> _launchURL(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        throw 'Could not launch $urlString';
+      }
+    } catch (e) {
+      debugPrint('Error launching URL: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open link: $urlString'),
+            backgroundColor: const Color(0xFFF25F4C),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showInfoDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+              child: Container(
+                width: 500,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF16151E).withOpacity(0.92),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withOpacity(0.08), width: 1.5),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title + Close Button
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Application Info',
+                          style: GoogleFonts.outfit(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white60),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                    const Divider(color: Colors.white10, height: 24),
+                    
+                    // Metadata List
+                    _buildInfoRow(
+                      'Owner', 
+                      'Tom Muñoz (tom-munoz.com)', 
+                      isLink: true,
+                      onTap: () => _launchURL('https://tom-munoz.com'),
+                    ),
+                    const SizedBox(height: 14),
+                    _buildInfoRow('Assistant', 'Google Antigravity', isLink: false),
+                    const SizedBox(height: 24),
+                    
+                    // Rules Sources List
+                    Text(
+                      'RULES SOURCES',
+                      style: GoogleFonts.outfit(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white54,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    _buildSourceLink('PUL Rules 2026', 'https://www.premierultimateleague.com/s/2026-PUL-Rules.pdf'),
+                    const SizedBox(height: 8),
+                    _buildSourceLink('UFA Rule Book 2026', 'https://watchufa.com/sites/default/files/UFA%20Rule%20Book%202026.pdf'),
+                    const SizedBox(height: 8),
+                    _buildSourceLink('USAU Official Rules 2026-27', 'https://usaultimate.org/wp-content/uploads/2025/12/2026-27-Official-Rules-of-Ultimate.pdf'),
+                    const SizedBox(height: 8),
+                    _buildSourceLink('WFDF Rules of Ultimate 2025-28', 'https://rules.wfdf.sport/wp-content/uploads/2024/12/WFDF-Rules-of-Ultimate-2025-2028.pdf'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, {bool isLink = false, VoidCallback? onTap}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: GoogleFonts.outfit(
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFF7F5AF0),
+            letterSpacing: 1.0,
+          ),
+        ),
+        const SizedBox(height: 4),
+        isLink
+            ? MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: onTap,
+                  child: Text(
+                    value,
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF2CB67D),
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              )
+            : Text(
+                value,
+                style: GoogleFonts.outfit(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                ),
+              ),
+      ],
+    );
+  }
+
+  Widget _buildSourceLink(String name, String url) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Material(
+        color: Colors.black.withOpacity(0.2),
+        child: InkWell(
+          onTap: () => _launchURL(url),
+          hoverColor: const Color(0xFF7F5AF0).withOpacity(0.08),
+          splashColor: const Color(0xFF7F5AF0).withOpacity(0.15),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withOpacity(0.04)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.link, size: 16, color: Color(0xFF2CB67D)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: GoogleFonts.outfit(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        url,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.firaCode(
+                          fontSize: 10,
+                          color: Colors.white30,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStickyHeader(bool isDesktop) {
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          height: 72,
+          padding: EdgeInsets.symmetric(horizontal: isDesktop ? 40.0 : 24.0),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0C0B10).withOpacity(0.82),
+            border: Border(
+              bottom: BorderSide(color: Colors.white.withOpacity(0.06), width: 1),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Logo + App Name
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF7F5AF0), Color(0xFF2CB67D)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.sports_hockey,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Text(
+                    'Ultimate Rules Assistant',
+                    style: GoogleFonts.outfit(
+                      fontSize: isDesktop ? 22 : 18,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ],
+              ),
+              
+              // Custom styled Info Button
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Material(
+                  color: Colors.white.withOpacity(0.04),
+                  child: InkWell(
+                    onTap: _showInfoDialog,
+                    hoverColor: const Color(0xFF7F5AF0).withOpacity(0.12),
+                    splashColor: const Color(0xFF7F5AF0).withOpacity(0.2),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline, size: 16, color: Colors.white70),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Info',
+                            style: GoogleFonts.outfit(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -164,114 +446,82 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
           ),
 
-          // 2. Main Scrollable Container
+          // 2. Main Layout (Sticky Header + Scrollable Content underneath)
           SafeArea(
-            child: CustomScrollView(
-              slivers: [
-                // Premium Styled App Header
-                SliverToBoxAdapter(child: _buildHeader(isDesktop)),
+            child: Column(
+              children: [
+                _buildStickyHeader(isDesktop),
+                Expanded(
+                  child: CustomScrollView(
+                    slivers: [
+                      // Space under header for visual breathing room
+                      const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
-                // Selector Panels & Mode Toggles
-                SliverToBoxAdapter(child: _buildControlPanel(isDesktop)),
+                      // Selector Panels & Mode Toggles
+                      SliverToBoxAdapter(child: _buildControlPanel(isDesktop)),
 
-                // Predefined Scenarios List
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'PRE-DEFINED SCENARIOS',
-                          style: GoogleFonts.outfit(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.5,
-                            color: Colors.white.withOpacity(0.5),
+                      // Predefined Scenarios List
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Prominent Header with Left Accent Bar
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 3.5,
+                                    height: 15,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(2),
+                                      color: _leagueColors[_selectedLeagueA] ?? const Color(0xFF7F5AF0),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'PRE-DEFINED SCENARIOS',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.2,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              _buildScenariosList(),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        _buildScenariosList(),
-                      ],
-                    ),
-                  ),
-                ),
+                      ),
 
-                // Query Text Area Input
-                SliverToBoxAdapter(child: _buildQueryInputSection(isDesktop)),
+                      // Query Text Area Input
+                      SliverToBoxAdapter(child: _buildQueryInputSection(isDesktop)),
 
-                // Output Display Panel
-                SliverToBoxAdapter(child: _buildOutputSection(isDesktop)),
-                
-                // Footer
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 32),
-                    child: Center(
-                      child: Text(
-                        'Ultimate Rules Assistant RAG System • v1.0.0',
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.2),
+                      // Output Display Panel
+                      SliverToBoxAdapter(child: _buildOutputSection(isDesktop)),
+                      
+                      // Footer
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 32),
+                          child: Center(
+                            child: Text(
+                              'Ultimate Rules Assistant RAG System • v1.0.0',
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                color: Colors.white.withOpacity(0.2),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader(bool isDesktop) {
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: isDesktop ? 40.0 : 24.0, 
-        vertical: 32.0
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF7F5AF0), Color(0xFF2CB67D)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.sports_hockey, // Representing the frisbee disc
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Text(
-                'Ultimate Rules Assistant',
-                style: GoogleFonts.outfit(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  letterSpacing: -0.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Ultimate Frisbee Comparative Rulebook Router',
-            style: GoogleFonts.outfit(
-              fontSize: 16,
-              fontWeight: FontWeight.w400,
-              color: Colors.white.withOpacity(0.6),
             ),
           ),
         ],
@@ -285,7 +535,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       padding: EdgeInsets.symmetric(horizontal: spacing, vertical: 12),
       child: Column(
         children: [
-          // Glassmorphic Container
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: BackdropFilter(
@@ -299,11 +548,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
                 child: Column(
                   children: [
-                    // Mode Switcher Toggle Tab
                     _buildModeSwitcher(),
                     const SizedBox(height: 24),
-                    
-                    // League Selectors Dropdowns
                     _buildLeagueSelectors(isDesktop),
                   ],
                 ),
@@ -328,7 +574,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           final tabWidth = constraints.maxWidth / 2;
           return Stack(
             children: [
-              // Animated slider selector
               AnimatedPositioned(
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeInOut,
@@ -378,7 +623,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     child: InkWell(
                       onTap: () => setState(() {
                         _isCompareMode = true;
-                        // Avoid same-league selection initially
                         if (_selectedLeagueA == _selectedLeagueB) {
                           _selectedLeagueB = _leagues.firstWhere((l) => l != _selectedLeagueA);
                         }
@@ -417,7 +661,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _buildLeagueSelectors(bool isDesktop) {
     if (!_isCompareMode) {
-      // Single Review League Dropdown Selector
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -439,9 +682,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ],
       );
     } else {
-      // Side-by-side Dual Selectors
       final items = [
-        // Dropdown A
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -461,14 +702,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 onChanged: (val) {
                   setState(() {
                     _selectedLeagueA = val!;
-                    // Prevent duplicate selections dynamically
                     if (_selectedLeagueA == _selectedLeagueB) {
                       _selectedLeagueB = _leagues.firstWhere((l) => l != _selectedLeagueA);
                     }
                   });
                 },
                 color: _leagueColors[_selectedLeagueA]!,
-                // Exclude currently chosen B option
                 exclude: _selectedLeagueB,
               ),
             ],
@@ -477,7 +716,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         
         SizedBox(width: isDesktop ? 24 : 12),
         
-        // Dynamic swap middle button
         Padding(
           padding: const EdgeInsets.only(top: 20),
           child: IconButton(
@@ -494,7 +732,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         
         SizedBox(width: isDesktop ? 24 : 12),
 
-        // Dropdown B
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -517,7 +754,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   });
                 },
                 color: _leagueColors[_selectedLeagueB]!,
-                // Exclude currently chosen A option
                 exclude: _selectedLeagueA,
               ),
             ],
@@ -537,7 +773,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     required Color color,
     String? exclude,
   }) {
-    // Filtered options to prevent double-selection
     final filteredLeagues = _leagues.where((l) => l != exclude).toList();
 
     return Container(
@@ -643,7 +878,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Category Label
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
@@ -661,7 +895,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           ),
                         ),
                         const Spacer(),
-                        // Title
                         Text(
                           s['title'] ?? 'Scenario',
                           maxLines: 2,
@@ -673,7 +906,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           ),
                         ),
                         const SizedBox(height: 4),
-                        // Quick short preview
                         Text(
                           s['description'] ?? '',
                           maxLines: 1,
@@ -705,14 +937,27 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'DESCRIBE THE RULES SCENARIO',
-                style: GoogleFonts.outfit(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white54,
-                  letterSpacing: 1.2,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 3.5,
+                    height: 15,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(2),
+                      color: _leagueColors[_selectedLeagueA] ?? const Color(0xFF7F5AF0),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'DESCRIBE THE RULES SCENARIO',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
               ),
               if (_queryController.text.isNotEmpty)
                 TextButton(
@@ -728,9 +973,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 )
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           
-          // Spacious query text field
           Container(
             decoration: BoxDecoration(
               color: Colors.black.withOpacity(0.3),
@@ -754,7 +998,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           ),
           const SizedBox(height: 16),
 
-          // Submit Action Button
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -828,7 +1071,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         child: Center(
           child: Column(
             children: [
-              // Stylish modern wave loader
               const LinearProgressIndicator(
                 backgroundColor: Colors.transparent,
                 valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF7F5AF0)),
@@ -890,7 +1132,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     final String responseMarkdown = _synthesizedResult!['response'] ?? '';
 
-    // If comparing two leagues, render the dynamic split screen or tabbed view
     if (_isCompareMode) {
       return _buildComparativeOutput(responseMarkdown, isDesktop, padding);
     } else {
@@ -916,7 +1157,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header badge
                 Row(
                   children: [
                     Container(
@@ -950,17 +1190,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildComparativeOutput(String markdown, bool isDesktop, double padding) {
-    // Parse the 3 parts from the response using robust RegEx to split cleanly
-    // Expected structure:
-    // 1. LEAGUE A RULING ...
-    // 2. LEAGUE B RULING ...
-    // 3. OBSERVER ANALYSIS ...
-    
     String partA = '';
     String partB = '';
     String partAnalysis = '';
 
-    // Attempt splitting based on explicit section headings or fallback to a general split
     final parts = _parseThreePartResponse(markdown);
     partA = parts[0];
     partB = parts[1];
@@ -970,7 +1203,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final colorB = _leagueColors[_selectedLeagueB] ?? const Color(0xFF2CB67D);
 
     if (isDesktop) {
-      // Ocular comparative layout for Desktop/Web (side-by-side columns)
       return Padding(
         padding: EdgeInsets.symmetric(horizontal: padding, vertical: 16),
         child: Column(
@@ -978,7 +1210,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Column League A
                 Expanded(
                   child: _buildGlassCard(
                     title: '$_selectedLeagueA RULING',
@@ -987,7 +1218,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                 ),
                 const SizedBox(width: 24),
-                // Column League B
                 Expanded(
                   child: _buildGlassCard(
                     title: '$_selectedLeagueB RULING',
@@ -998,18 +1228,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ],
             ),
             const SizedBox(height: 24),
-            // Elevated Observer analysis full-width card below
             _buildObserverCard(partAnalysis),
           ],
         ),
       );
     } else {
-      // Responsive Tabbed/Stacked layout for Mobile screens
       return Padding(
         padding: EdgeInsets.symmetric(horizontal: padding, vertical: 16),
         child: Column(
           children: [
-            // Stacked Cards for clean scrolling Mobile UX
             _buildGlassCard(
               title: '$_selectedLeagueA RULING',
               content: partA,
@@ -1080,7 +1307,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildObserverCard(String content) {
-    const goldColor = Color(0xFFFFD700); // Observer Gold
+    const goldColor = Color(0xFFFFD700);
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
@@ -1150,19 +1377,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  /// Parses the three-part LLM synthesis markdown output dynamically
   List<String> _parseThreePartResponse(String markdown) {
-    // We isolate sections using Regex.
-    // Clean headers usually appear in LLM responses e.g.:
-    // "1. LEAGUE A RULING" or "## 1. USAU RULING" or "### LEAGUE A RULING"
-    // Let's search for patterns and split.
-
-    // A list of regex headers we expect for splitting
-    final RegExp leagueAHeader = RegExp(r'(1\.\s*LEAGUE\s*[AB]\s*RULING|LEAGUE\s*[AB]\s*RULING|LEAGUE\s*A\s*RULING|PART\s*1)', caseSensitive: false);
-    final RegExp leagueBHeader = RegExp(r'(2\.\s*LEAGUE\s*[AB]\s*RULING|LEAGUE\s*B\s*RULING|PART\s*2)', caseSensitive: false);
-    final RegExp observerHeader = RegExp(r'(3\.\s*OBSERVER\s*ANALYSIS|OBSERVER\s*ANALYSIS|SUMMARY\s*OF\s*DIFFERENCES|PART\s*3)', caseSensitive: false);
-
-    // If headers cannot be easily matched via explicit regex splits, we look at markdown indexes
     int idxA = markdown.toLowerCase().indexOf('league a ruling');
     if (idxA == -1) idxA = markdown.toLowerCase().indexOf('1. ');
     if (idxA == -1) idxA = 0;
@@ -1183,7 +1398,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       }
     } catch (_) {}
 
-    // Dynamic split fallback if headers are formatted as numbers or general list items
     final listSplit = markdown.split(RegExp(r'\n(?=\d\.\s*|##+\s*\d|###+\s*LEAGUE|##+\s*LEAGUE|##+\s*OBSERVER)'));
     if (listSplit.length >= 3) {
       return [
@@ -1193,7 +1407,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ];
     }
 
-    // Default general split
     final length = markdown.length;
     return [
       markdown.substring(0, (length * 0.35).toInt()),
