@@ -188,10 +188,10 @@ def query_llm(system_prompt: str, user_prompt: str) -> str:
         try:
             from google import genai
             from google.genai import types
-            print("Querying Google Gemini via modern google.genai SDK (gemini-2.5-flash)...")
+            print("Querying Google Gemini via modern google.genai SDK (gemini-3.5-flash)...")
             client = genai.Client(api_key=GEMINI_API_KEY)
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-3.5-flash',
                 contents=user_prompt,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
