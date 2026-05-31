@@ -71,9 +71,7 @@ SYNONYM_MAP = {
     "last": ["quarter", "quarters", "minutes", "timing", "regulation", "time", "length"],
     "time": ["timing", "regulation", "quarter", "quarters", "minutes"],
     "length": ["timing", "regulation", "quarter", "quarters", "minutes"],
-    "brick": ["sideline", "pull", "signal", "out", "bounds"],
-    "double": ["team", "marking", "violation", "marker"],
-    "team": ["double", "marking", "violation"],
+    "double": ["marking", "violation", "marker"],
     "foul": ["contact", "receiving", "collision", "play", "dangerous"],
     "timing": ["quarter", "quarters", "minutes", "regulation"],
     "quarters": ["minutes", "timing", "regulation", "duration"]
@@ -198,7 +196,8 @@ def search_context_for_league(league: str, query: str, top_k: int = 5) -> str:
     expanded_tokens = expand_query_tokens(query_tokens)
     N = len(pages)
 
-    # Score pages based on TF-IDF * WordLength heuristic
+    # Score pages based on BM25 TF saturation * IDF * WordLength heuristic
+    k1 = 1.2
     scored_pages = []
     for p in pages:
         score = 0.0
@@ -209,7 +208,9 @@ def search_context_for_league(league: str, query: str, top_k: int = 5) -> str:
                 df = df_map.get(token, 0)
                 # Smooth Inverse Document Frequency
                 idf = math.log((N + 1) / (df + 1)) + 1
-                score += tf * idf * len(token)
+                # BM25 Term Frequency Saturation
+                tf_saturated = (tf * (k1 + 1)) / (tf + k1)
+                score += tf_saturated * idf * len(token)
         scored_pages.append((score, p))
 
     # Sort descending by score
