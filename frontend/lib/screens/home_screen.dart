@@ -161,67 +161,144 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: Colors.white.withOpacity(0.08), width: 1.5),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title + Close Button
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Application Info',
-                          style: GoogleFonts.outfit(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title + Close Button
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Application Info',
+                            style: GoogleFonts.outfit(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white60),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ],
+                      ),
+                      const Divider(color: Colors.white10, height: 24),
+                      
+                      // Metadata List
+                      _buildInfoRow(
+                        'Owner', 
+                        'Tom Muñoz (tom-munoz.com)', 
+                        isLink: true,
+                        onTap: () => _launchURL('https://tom-munoz.com'),
+                      ),
+                      const SizedBox(height: 14),
+                      _buildInfoRow('Assistant', 'Google Antigravity', isLink: false),
+                      const SizedBox(height: 24),
+                      
+                      // Rules Sources List
+                      Text(
+                        'RULES SOURCES',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white54,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      
+                      _buildSourceLink('PUL Rules 2026', 'https://www.premierultimateleague.com/s/2026-PUL-Rules.pdf'),
+                      const SizedBox(height: 8),
+                      _buildSourceLink('UFA Rule Book 2026', 'https://watchufa.com/sites/default/files/UFA%20Rule%20Book%202026.pdf'),
+                      const SizedBox(height: 8),
+                      _buildSourceLink('USAU Official Rules 2026-27', 'https://usaultimate.org/wp-content/uploads/2025/12/2026-27-Official-Rules-of-Ultimate.pdf'),
+                      const SizedBox(height: 8),
+                      _buildSourceLink('WFDF Rules of Ultimate 2025-28', 'https://rules.wfdf.sport/wp-content/uploads/2024/12/WFDF-Rules-of-Ultimate-2025-2028.pdf'),
+                      const SizedBox(height: 24),
+
+                      // Known Issues List
+                      Text(
+                        'KNOWN ISSUES',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white54,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildKnownIssueRow('1', 'Sometimes how the scenario or question is worded can confuse the AI. Try different wording to see if that helps.'),
+                      _buildKnownIssueRow('2', 'The solution sometimes has issues with content that is not clearly formatted/structured.'),
+                      _buildKnownIssueRow('3', 'The solution may have issues with images embedded in the rules documents.'),
+                      const SizedBox(height: 16),
+                      
+                      // Email Link
+                      MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () => _launchURL('mailto:tom.o.munoz@gmail.com'),
+                          child: RichText(
+                            text: TextSpan(
+                              style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                color: Colors.white70,
+                                height: 1.4,
+                              ),
+                              children: [
+                                const TextSpan(text: '*Drop Tom an email ('),
+                                TextSpan(
+                                  text: 'tom.o.munoz@gmail.com',
+                                  style: GoogleFonts.outfit(
+                                    color: const Color(0xFF2CB67D),
+                                    fontWeight: FontWeight.bold,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                                const TextSpan(text: ') if you experience a situation that you believe is incorrect or not behaving properly.'),
+                              ],
+                            ),
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white60),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ],
-                    ),
-                    const Divider(color: Colors.white10, height: 24),
-                    
-                    // Metadata List
-                    _buildInfoRow(
-                      'Owner', 
-                      'Tom Muñoz (tom-munoz.com)', 
-                      isLink: true,
-                      onTap: () => _launchURL('https://tom-munoz.com'),
-                    ),
-                    const SizedBox(height: 14),
-                    _buildInfoRow('Assistant', 'Google Antigravity', isLink: false),
-                    const SizedBox(height: 24),
-                    
-                    // Rules Sources List
-                    Text(
-                      'RULES SOURCES',
-                      style: GoogleFonts.outfit(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white54,
-                        letterSpacing: 1.2,
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    
-                    _buildSourceLink('PUL Rules 2026', 'https://www.premierultimateleague.com/s/2026-PUL-Rules.pdf'),
-                    const SizedBox(height: 8),
-                    _buildSourceLink('UFA Rule Book 2026', 'https://watchufa.com/sites/default/files/UFA%20Rule%20Book%202026.pdf'),
-                    const SizedBox(height: 8),
-                    _buildSourceLink('USAU Official Rules 2026-27', 'https://usaultimate.org/wp-content/uploads/2025/12/2026-27-Official-Rules-of-Ultimate.pdf'),
-                    const SizedBox(height: 8),
-                    _buildSourceLink('WFDF Rules of Ultimate 2025-28', 'https://rules.wfdf.sport/wp-content/uploads/2024/12/WFDF-Rules-of-Ultimate-2025-2028.pdf'),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildKnownIssueRow(String number, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$number. ',
+            style: GoogleFonts.outfit(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF7F5AF0),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.outfit(
+                fontSize: 13,
+                color: Colors.white70,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
