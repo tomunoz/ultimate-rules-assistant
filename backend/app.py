@@ -268,7 +268,13 @@ def query_llm(system_prompt: str, user_prompt: str) -> str:
             client = genai.Client(api_key=GEMINI_API_KEY)
             
             # Sequentially attempt models to ensure absolute high-availability on Render
-            models_to_try = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-3.1-flash-lite']
+            models_to_try = [
+                'gemini-3.5-flash', 
+                'gemini-2.5-flash', 
+                'gemini-1.5-flash', 
+                'gemini-3.1-flash-lite', 
+                'gemini-2.0-flash-lite'
+            ]
             
             for model_name in models_to_try:
                 try:
