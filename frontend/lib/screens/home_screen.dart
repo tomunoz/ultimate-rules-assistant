@@ -367,7 +367,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             children: [
                               _buildTabItem(0, '1. How to Ask', activeTab, () => setDialogState(() => activeTab = 0)),
                               _buildTabItem(1, '2. Good vs Poor', activeTab, () => setDialogState(() => activeTab = 1)),
-                              _buildTabItem(2, '3. AI Limits', activeTab, () => setDialogState(() => activeTab = 2)),
+                              _buildTabItem(2, '3. Modes & Sources', activeTab, () => setDialogState(() => activeTab = 2)),
+                              _buildTabItem(3, '4. AI Limits', activeTab, () => setDialogState(() => activeTab = 3)),
                             ],
                           ),
                         ),
@@ -494,6 +495,53 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             poor: '“What happens on a double team?”',
             good: '“A defender is stalling the thrower, and a second defender stands 2 meters away to block the break throw. The thrower calls double team. What is the ruling?”',
             why: 'Detailing the defensive positions and infraction call matches marking violation criteria perfectly.',
+          ),
+        ],
+      );
+    } else if (tabIndex == 2) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'CORE SEARCH MODES',
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF7F5AF0),
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildLimitRow(
+            Icons.menu_book_outlined,
+            'Single Review Mode (Purpose & Usage)',
+            'Used to review a rules scenario under a single specific league. Simply select the target league (e.g. USAU, WFDF, PUL, UFA), type your physical query in the text field, and get a tailored response sourced directly from that rulebook.',
+          ),
+          _buildLimitRow(
+            Icons.compare_arrows_outlined,
+            'Compare Leagues Mode (Purpose & Usage)',
+            'Used to compare rules across two different leagues. Select League A and League B (e.g. USAU vs WFDF) to receive side-by-side rulings and a full analysis detailing exactly how they differ.',
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'RULEBOOKS & SOURCE HIERARCHY',
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF7F5AF0),
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          _buildLimitRow(
+            Icons.verified_user_outlined,
+            'Exclusive Rulebook Constraints',
+            'The assistant uses ONLY the official rulebook PDFs listed in the "Info" dialog to synthesize rulings. It does not pull in external web searches or unverified knowledge, guaranteeing absolute factual accuracy to the official text.',
+          ),
+          _buildLimitRow(
+            Icons.layers_outlined,
+            'PUL / USAU Fallback Hierarchy',
+            'Because PUL rules are built as a set of exceptions atop the USAU rules, querying PUL will search the PUL rulebook first. If a specific scenario or rule is not explicitly addressed there, the system automatically falls back to USAU rules to complete your PUL ruling.',
           ),
         ],
       );
