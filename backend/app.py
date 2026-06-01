@@ -74,7 +74,12 @@ SYNONYM_MAP = {
     "double": ["marking", "violation", "marker"],
     "foul": ["contact", "receiving", "collision", "play", "dangerous"],
     "timing": ["quarter", "quarters", "minutes", "regulation"],
-    "quarters": ["minutes", "timing", "regulation", "duration"]
+    "quarters": ["minutes", "timing", "regulation", "duration"],
+    "foot": ["touch", "touched", "contact", "contacted", "body", "leg"],
+    "touch": ["touched", "contact", "contacted", "foot", "hand", "body", "leg", "arm"],
+    "touched": ["touch", "contact", "contacted", "foot", "hand", "body", "leg", "arm"],
+    "rolls": ["rolling", "roll", "ground", "run"],
+    "endzone": ["zone", "goal", "line"]
 }
 
 def clean_text(text: str) -> str:
@@ -201,9 +206,9 @@ def search_context_for_league(league: str, query: str, top_k: int = 5) -> str:
     scored_pages = []
     for p in pages:
         score = 0.0
-        text_lower = p["text"].lower()
+        page_tokens = p["tokens"]
         for token in expanded_tokens:
-            tf = text_lower.count(token)
+            tf = page_tokens.count(token)
             if tf > 0:
                 df = df_map.get(token, 0)
                 # Smooth Inverse Document Frequency
@@ -342,6 +347,13 @@ def process_rules_query(payload: QueryRequest):
     system_prompt = (
         "You are an expert Ultimate Frisbee rules official, head observer, and sports rules historian. "
         "Evaluate the user's scenario using ONLY the provided document text retrieved by the backend routing logic.\n\n"
+        "RULES INTERPRETATION GUIDELINE:\n"
+        "- Map physical descriptions of player contact (e.g., a disc rolling over a player's foot, touching their leg, contacting their body, "
+        "or a player attempting to stop/trap a disc on the ground) directly to rules terminology like 'touched by the receiving team'. "
+        "For example, a rolling pull that contacts a player's foot/leg and then exits the end zone is a touched pull, NOT an untouched pull.\n"
+        "- Carefully distinguish between touched vs. untouched out-of-bounds pulls under USAU (9.F.3 vs. 9.F.2) and other leagues. "
+        "Untouched pulls out-of-bounds are placed on the 'central zone' (excluding end zones, e.g. on the goal line if exiting the end zone), "
+        "whereas touched pulls out-of-bounds are placed on the 'playing field' (which includes the end zones, e.g. at the nearest spot inside the end zone/on the endline where it crossed).\n\n"
     )
 
     if len(leagues) == 1:
