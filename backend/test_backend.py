@@ -81,9 +81,34 @@ def test_rulebook_router_app():
     print(f" - Contains Observer Analysis / Differences? {has_observer}")
     
     assert has_league_a and has_league_b, "Output must contain isolated league rulings."
+
+    # 5. Test Multi-turn Dialog with History Payload
+    print("[5/5] Testing POST /api/query endpoint for FOLLOW-UP DIALOG (with conversation history)...")
+    followup_payload = {
+        "selected_leagues": ["USAU"],
+        "user_query": "What if the thrower was inside their own endzone when the double team was called?",
+        "history": [
+            {
+                "role": "user",
+                "content": "What is the rule when a player calls a double team marking violation?"
+            },
+            {
+                "role": "assistant",
+                "content": "Under USAU rules, only the thrower may call double team..."
+            }
+        ]
+    }
+    response_followup = client.post("/api/query", json=followup_payload)
+    assert response_followup.status_code == 200, "Follow-up query with history failed."
+    followup_res = response_followup.json()
+    print("Success: Received response for Multi-turn Follow-up Dialog.")
+    print("Follow-up response snippet:")
+    print(f" {followup_res['response'][:300]}...\n")
+
     print("\n==================================================")
     print("      ALL INTEGRATION TESTS PASSED SUCCESSFULLY!")
     print("==================================================\n")
+
 
 if __name__ == "__main__":
     test_rulebook_router_app()

@@ -26,6 +26,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   bool _isLoadingScenarios = true;
   String? _scenariosError;
 
+  // Multi-turn Conversation Dialog State
+  final List<Map<String, String>> _conversationHistory = [];
+
   bool _isSynthesizing = false;
   Map<String, dynamic>? _synthesizedResult;
   String? _synthesisError;
@@ -65,13 +68,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
+  void _resetConversation() {
+    setState(() {
+      _conversationHistory.clear();
+      _synthesizedResult = null;
+      _synthesisError = null;
+      _queryController.clear();
+    });
+  }
+
   Future<void> _submitQuery() async {
     final query = _queryController.text.trim();
     if (query.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Please type a rules query or select a pre-defined scenario.',
+            'Please type a rules query or follow-up question.',
             style: GoogleFonts.outfit(),
           ),
           backgroundColor: const Color(0xFFF25F4C),
@@ -82,7 +94,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
     setState(() {
       _isSynthesizing = true;
-      _synthesizedResult = null;
       _synthesisError = null;
     });
 
@@ -90,10 +101,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ? [_selectedLeagueA, _selectedLeagueB] 
         : [_selectedLeagueA];
 
+    final historyPayload = List<Map<String, String>>.from(_conversationHistory);
+
     try {
-      final result = await _apiService.queryRules(leaguesToSend, query);
+      final result = await _apiService.queryRules(
+        leaguesToSend, 
+        query, 
+        history: historyPayload,
+      );
+      final responseText = result['response'] ?? '';
+
       setState(() {
         _synthesizedResult = result;
+        _conversationHistory.add({'role': 'user', 'content': query});
+        _conversationHistory.add({'role': 'assistant', 'content': responseText});
+        _queryController.clear();
         _isSynthesizing = false;
       });
     } catch (e) {
@@ -106,6 +128,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   void _selectScenario(Map<String, dynamic> scenario) {
     setState(() {
+      _conversationHistory.clear();
+      _synthesizedResult = null;
+      _synthesisError = null;
       _queryController.text = scenario['description'] ?? '';
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -119,6 +144,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
   }
+
 
   /// Securely launches external browser URLs
   Future<void> _launchURL(String urlString) async {
@@ -1467,6 +1493,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Widget _buildQueryInputSection(bool isDesktop) {
     final padding = isDesktop ? 40.0 : 24.0;
+    final isDialogActive = _conversationHistory.isNotEmpty;
+
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: padding, vertical: 16),
       child: Column(
@@ -1487,7 +1515,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'DESCRIBE THE RULES SCENARIO',
+                    isDialogActive ? 'ASK A FOLLOW-UP QUESTION' : 'DESCRIBE THE RULES SCENARIO',
                     style: GoogleFonts.outfit(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
@@ -1497,18 +1525,35 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   ),
                 ],
               ),
-              if (_queryController.text.isNotEmpty)
-                TextButton(
-                  onPressed: () => setState(() => _queryController.clear()),
-                  child: Text(
-                    'Clear Text',
-                    style: GoogleFonts.outfit(
-                      color: const Color(0xFFF25F4C),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+              Row(
+                children: [
+                  if (isDialogActive)
+                    TextButton.icon(
+                      onPressed: _resetConversation,
+                      icon: const Icon(Icons.restart_alt, size: 14, color: Color(0xFF7F5AF0)),
+                      label: Text(
+                        'Start New Scenario',
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFF7F5AF0),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
-                )
+                  if (_queryController.text.isNotEmpty)
+                    TextButton(
+                      onPressed: () => setState(() => _queryController.clear()),
+                      child: Text(
+                        'Clear Text',
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFFF25F4C),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              )
             ],
           ),
           const SizedBox(height: 12),
@@ -1518,17 +1563,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               color: Colors.black.withOpacity(0.3),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Colors.white.withOpacity(0.08),
+                color: isDialogActive 
+                    ? const Color(0xFF7F5AF0).withOpacity(0.4) 
+                    : Colors.white.withOpacity(0.08),
+                width: isDialogActive ? 1.5 : 1.0,
               ),
             ),
             child: TextField(
               controller: _queryController,
-              maxLines: 4,
+              maxLines: isDialogActive ? 3 : 4,
               keyboardType: TextInputType.multiline,
               style: GoogleFonts.outfit(color: Colors.white, fontSize: 15),
               decoration: InputDecoration(
                 contentPadding: const EdgeInsets.all(20),
-                hintText: 'e.g., During a pull, the disc rolls out of bounds. The offense signals brick...',
+                hintText: isDialogActive
+                    ? 'Ask a follow-up question based on the scenario or ruling above (e.g., What if this happened in the endzone?)...'
+                    : 'e.g., During a pull, the disc rolls out of bounds. The offense signals brick...',
                 hintStyle: GoogleFonts.outfit(color: Colors.white30, fontSize: 14),
                 border: InputBorder.none,
               ),
@@ -1542,7 +1592,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             child: ElevatedButton(
               onPressed: _isSynthesizing ? null : _submitQuery,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isCompareMode ? const Color(0xFF2CB67D) : const Color(0xFF7F5AF0),
+                backgroundColor: isDialogActive
+                    ? const Color(0xFF7F5AF0)
+                    : (_isCompareMode ? const Color(0xFF2CB67D) : const Color(0xFF7F5AF0)),
                 disabledBackgroundColor: Colors.white.withOpacity(0.05),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 elevation: 0,
@@ -1563,7 +1615,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         ),
                         const SizedBox(width: 14),
                         Text(
-                          'RAG Route & LLM Synthesis Active...',
+                          isDialogActive
+                              ? 'Synthesizing Follow-Up Ruling...'
+                              : 'RAG Route & LLM Synthesis Active...',
                           style: GoogleFonts.outfit(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
@@ -1576,14 +1630,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          _isCompareMode ? Icons.compare_arrows : Icons.search,
+                          isDialogActive
+                              ? Icons.send_rounded
+                              : (_isCompareMode ? Icons.compare_arrows : Icons.search),
                           color: Colors.white,
                         ),
                         const SizedBox(width: 10),
                         Text(
-                          _isCompareMode 
-                              ? 'EXECUTE DUAL COMPARISON RAG'
-                              : 'EXECUTE SINGLE LEAGUE RAG',
+                          isDialogActive
+                              ? 'SUBMIT FOLLOW-UP QUESTION'
+                              : (_isCompareMode 
+                                  ? 'EXECUTE DUAL COMPARISON RAG'
+                                  : 'EXECUTE SINGLE LEAGUE RAG'),
                           style: GoogleFonts.outfit(
                             fontWeight: FontWeight.w800,
                             fontSize: 14,
@@ -1603,59 +1661,47 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Widget _buildOutputSection(bool isDesktop) {
     final padding = isDesktop ? 40.0 : 24.0;
 
-    if (_isSynthesizing) {
-      return Padding(
-        padding: EdgeInsets.symmetric(horizontal: padding, vertical: 40),
-        child: Center(
-          child: Column(
-            children: [
-              const LinearProgressIndicator(
-                backgroundColor: Colors.transparent,
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF7F5AF0)),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Programmatically isolating rulebook PDFs & synthesizing answer...',
-                style: GoogleFonts.outfit(color: Colors.white30, fontSize: 13),
-              ),
-            ],
-          ),
-        ),
-      );
+    if (_conversationHistory.isEmpty && !_isSynthesizing && _synthesisError == null) {
+      return const SizedBox.shrink();
     }
 
-    if (_synthesisError != null) {
-      return Padding(
-        padding: EdgeInsets.symmetric(horizontal: padding, vertical: 20),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF25F4C).withOpacity(0.08),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFF25F4C).withOpacity(0.3)),
-          ),
+    List<Widget> widgets = [];
+
+    // Conversational dialog header
+    if (_conversationHistory.isNotEmpty) {
+      final turnCount = _conversationHistory.where((m) => m['role'] == 'user').length;
+      widgets.add(
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: padding, vertical: 8),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Icon(Icons.error_outline, color: Color(0xFFF25F4C), size: 30),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'RAG Routing Synthesis Failed',
-                      style: GoogleFonts.outfit(
-                        color: const Color(0xFFF25F4C),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
+              Row(
+                children: [
+                  const Icon(Icons.forum_outlined, size: 18, color: Color(0xFF2CB67D)),
+                  const SizedBox(width: 8),
+                  Text(
+                    'RULES DIALOG & RULING HISTORY ($turnCount ${turnCount == 1 ? 'TURN' : 'TURNS'})',
+                    style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                      color: const Color(0xFF2CB67D),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _synthesisError!,
-                      style: GoogleFonts.outfit(color: Colors.white70, fontSize: 14),
-                    ),
-                  ],
+                  ),
+                ],
+              ),
+              OutlinedButton.icon(
+                onPressed: _resetConversation,
+                icon: const Icon(Icons.restart_alt, size: 14, color: Colors.white70),
+                label: Text(
+                  'Clear Thread',
+                  style: GoogleFonts.outfit(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.white.withOpacity(0.15)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 ),
               ),
             ],
@@ -1664,18 +1710,149 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       );
     }
 
-    if (_synthesizedResult == null) {
-      return const SizedBox.shrink();
+    // Render conversation turns sequentially
+    int questionCounter = 0;
+    for (int i = 0; i < _conversationHistory.length; i++) {
+      final msg = _conversationHistory[i];
+      if (msg['role'] == 'user') {
+        questionCounter++;
+        widgets.add(
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: padding, vertical: 8),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF7F5AF0).withOpacity(0.3), width: 1),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF7F5AF0).withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.person, color: Color(0xFF7F5AF0), size: 18),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            questionCounter == 1 ? 'INITIAL USER SCENARIO' : 'FOLLOW-UP QUESTION #$questionCounter',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF7F5AF0),
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            msg['content'] ?? '',
+                            style: GoogleFonts.outfit(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      } else if (msg['role'] == 'assistant') {
+        final content = msg['content'] ?? '';
+        if (_isCompareMode) {
+          widgets.add(_buildComparativeOutput(content, isDesktop, padding));
+        } else {
+          widgets.add(_buildSingleOutput(content, padding));
+        }
+      }
     }
 
-    final String responseMarkdown = _synthesizedResult!['response'] ?? '';
-
-    if (_isCompareMode) {
-      return _buildComparativeOutput(responseMarkdown, isDesktop, padding);
-    } else {
-      return _buildSingleOutput(responseMarkdown, padding);
+    if (_isSynthesizing) {
+      widgets.add(
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: padding, vertical: 30),
+          child: Center(
+            child: Column(
+              children: [
+                const LinearProgressIndicator(
+                  backgroundColor: Colors.transparent,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF7F5AF0)),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Synthesizing contextual follow-up ruling...',
+                  style: GoogleFonts.outfit(color: Colors.white60, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
+
+    if (_synthesisError != null) {
+      widgets.add(
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: padding, vertical: 16),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF25F4C).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFF25F4C).withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Color(0xFFF25F4C), size: 30),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'RAG Routing Synthesis Failed',
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFFF25F4C),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _synthesisError!,
+                        style: GoogleFonts.outfit(color: Colors.white70, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: widgets,
+    );
   }
+
 
   Widget _buildSingleOutput(String markdown, double padding) {
     final activeColor = _leagueColors[_selectedLeagueA] ?? const Color(0xFF7F5AF0);

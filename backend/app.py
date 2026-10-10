@@ -21,9 +21,15 @@ app.add_middleware(
 )
 
 # Request schema
+class ChatMessage(BaseModel):
+    role: str = Field(..., description="Message sender role: 'user' or 'assistant'")
+    content: str = Field(..., description="Content of the message")
+
 class QueryRequest(BaseModel):
     selected_leagues: List[str] = Field(..., description="Array of selected leagues (1 or 2 leagues)")
     user_query: str = Field(..., description="The ultimate frisbee scenario query")
+    history: List[ChatMessage] = Field(default=[], description="Previous conversation turns in this dialog session")
+
 
 # Global PDF page cache
 PDF_CACHE: Dict[str, List[Dict[str, Any]]] = {}
@@ -348,9 +354,18 @@ def query_llm(system_prompt: str, user_prompt: str) -> str:
 def process_rules_query(payload: QueryRequest):
     leagues = payload.selected_leagues
     query = payload.user_query
+    history = payload.history or []
 
     if not leagues or len(leagues) > 2:
         raise HTTPException(status_code=400, detail="Must select either 1 or 2 leagues.")
+
+    # Build composite search query for RAG page retrieval if history exists
+    search_query = query
+    if history:
+        history_user_texts = [m.content for m in history if m.role == "user"]
+        if history_user_texts:
+            # Prepend initial question context to ensure follow-up queries carry core topic terms
+            search_query = f"{history_user_texts[0]} {query}"
 
     system_prompt = (
         "You are an expert Ultimate Frisbee rules official, head observer, and sports rules historian. "
@@ -364,9 +379,26 @@ def process_rules_query(payload: QueryRequest):
         "whereas touched pulls out-of-bounds are placed on the 'playing field' (which includes the end zones, e.g. at the nearest spot inside the end zone/on the endline where it crossed).\n\n"
     )
 
+    if history:
+        system_prompt += (
+            "DIALOG & FOLLOW-UP INSTRUCTIONS:\n"
+            "- You are engaged in a multi-turn dialog with the user who is asking follow-up questions about a previous scenario or ruling.\n"
+            "- Address the latest follow-up question directly while maintaining full consistency with previous rulings in the conversation history.\n"
+            "- If the follow-up refers to entities, positions, or calls mentioned in previous turns, resolve them accurately.\n\n"
+        )
+
+    # Format history turns for LLM prompt context
+    history_str = ""
+    if history:
+        history_str = "=== CONVERSATION HISTORY SO FAR ===\n"
+        for idx, msg in enumerate(history):
+            role_label = "USER QUESTION" if msg.role == "user" else "OFFICIAL RULING"
+            history_str += f"Turn {idx + 1} [{role_label}]:\n{msg.content}\n\n"
+        history_str += "===================================\n\n"
+
     if len(leagues) == 1:
         league_a = leagues[0]
-        context_a = search_context_for_league(league_a, query)
+        context_a = search_context_for_league(league_a, search_query)
 
         system_prompt += (
             "IF THE USER SOUGHT A SINGLE LEAGUE:\n"
@@ -381,18 +413,19 @@ def process_rules_query(payload: QueryRequest):
         )
 
         user_prompt = (
-            f"USER SCENARIO QUERY: {query}\n\n"
+            f"{history_str}"
+            f"USER SCENARIO QUERY / FOLLOW-UP: {query}\n\n"
             f"=== ROUTED RULEBOOK CONTEXT FOR LEAGUE: {league_a} ===\n"
             f"{context_a}\n\n"
-            "Rule on the scenario using ONLY the text above. Cite exactly."
+            "Rule on the scenario or follow-up question using ONLY the text above. Cite exactly."
         )
 
     else:
         league_a = leagues[0]
         league_b = leagues[1]
 
-        context_a = search_context_for_league(league_a, query)
-        context_b = search_context_for_league(league_b, query)
+        context_a = search_context_for_league(league_a, search_query)
+        context_b = search_context_for_league(league_b, search_query)
 
         system_prompt += (
             "IF THE USER SOUGHT A LEAGUE COMPARISON (2 LEAGUES):\n"
@@ -413,12 +446,13 @@ def process_rules_query(payload: QueryRequest):
         )
 
         user_prompt = (
-            f"USER SCENARIO QUERY: {query}\n\n"
+            f"{history_str}"
+            f"USER SCENARIO QUERY / FOLLOW-UP: {query}\n\n"
             f"=== ROUTED RULEBOOK CONTEXT FOR LEAGUE A: {league_a} ===\n"
             f"{context_a}\n\n"
             f"=== ROUTED RULEBOOK CONTEXT FOR LEAGUE B: {league_b} ===\n"
             f"{context_b}\n\n"
-            f"Rule on the scenario and contrast the two leagues. Make sure part 1 uses ONLY Context A, and part 2 uses ONLY Context B."
+            f"Rule on the scenario/follow-up and contrast the two leagues. Make sure part 1 uses ONLY Context A, and part 2 uses ONLY Context B."
         )
 
     response_text = query_llm(system_prompt, user_prompt)
@@ -427,6 +461,7 @@ def process_rules_query(payload: QueryRequest):
         "query": query,
         "response": response_text
     }
+
 
 @app.get("/api/scenarios")
 def get_scenarios():

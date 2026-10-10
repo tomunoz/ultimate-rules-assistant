@@ -46,12 +46,17 @@ class ApiService {
   }
 
   /// Queries the isolated RAG rulebook routing backend
-  /// Passes [selectedLeagues] (1 or 2 leagues) and the [userQuery]
-  Future<Map<String, dynamic>> queryRules(List<String> selectedLeagues, String userQuery) async {
+  /// Passes [selectedLeagues] (1 or 2 leagues), the [userQuery], and optional conversation [history]
+  Future<Map<String, dynamic>> queryRules(
+    List<String> selectedLeagues, 
+    String userQuery, {
+    List<Map<String, String>> history = const [],
+  }) async {
     final url = Uri.parse('$baseUrl/api/query');
     final payload = {
       'selected_leagues': selectedLeagues,
       'user_query': userQuery,
+      'history': history,
     };
 
     try {
@@ -72,3 +77,4 @@ class ApiService {
     }
   }
 }
+
